@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vũ Trụ Jang Wonyoung | Gallery</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg" type="image/jpg">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.11.4/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.11.4/dist/ScrollTrigger.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        /* Tùy chỉnh CSS inline để ghi đè */
+        html, body {
+            overflow: hidden !important;
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+        }
+        
+        ::-webkit-scrollbar {
+            display: none !important;
+        }
+        
+        .countdown {
+            font-size: 12rem !important;
+            opacity: 1 !important;
+        }
+        
+        .transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease-in-out;
+        }
+        
+        .transition-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        /* Hiệu ứng không gian mạnh mẽ hơn */
+        .dust-particle {
+            box-shadow: 0 0 15px 5px rgba(157, 78, 221, 0.5) !important;
+        }
+        
+        .welcome-screen {
+            perspective: 1000px;
+        }
+        
+        .welcome-card {
+            transform-style: preserve-3d;
+            transition: transform 1s ease-in-out;
+        }
+        
+        .enter-button {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .enter-button::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                135deg, 
+                transparent 20%, 
+                rgba(255, 255, 255, 0.1) 40%, 
+                rgba(255, 255, 255, 0.3) 50%, 
+                rgba(255, 255, 255, 0.1) 60%, 
+                transparent 80%
+            );
+            transform: rotate(45deg);
+            transition: all 0.8s;
+            z-index: 0;
+            opacity: 0;
+        }
+        
+        .enter-button:hover::after {
+            opacity: 1;
+            transform: rotate(45deg) translate(0, 0);
+            animation: shine 1.5s infinite;
+        }
+        
+        @keyframes shine {
+            0% {
+                transform: rotate(45deg) translate(-100%, -100%);
+            }
+            100% {
+                transform: rotate(45deg) translate(100%, 100%);
+            }
+        }
+        
+        /* Âm thanh nền và nút điều chỉnh */
+        .sound-toggle {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid rgba(157, 78, 221, 0.5);
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-light);
+            font-size: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 0 15px rgba(157, 78, 221, 0.3);
+            backdrop-filter: blur(5px);
+        }
+        
+        .sound-toggle:hover {
+            background: rgba(157, 78, 221, 0.3);
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(157, 78, 221, 0.5);
+        }
+        
+        .sound-tooltip {
+            position: absolute;
+            right: 60px;
+            top: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            color: white;
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .sound-toggle:hover .sound-tooltip {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas for WebGL background -->
+    <div id="canvas-container"></div>
+    <div class="noise-overlay"></div>
+    
+    <!-- Transition Overlay -->
+    <div class="transition-overlay" id="transition-overlay"></div>
+    
+    <!-- Audio Resources -->
+    <audio id="background-music" loop preload="auto">
+        <source src="mlem.mp3" type="audio/mp3">
+    </audio>
+    <audio id="hover-sound" preload="auto">
+        <source src="https://assets.codepen.io/217233/soft-tonal-hit.mp3" type="audio/mp3">
+    </audio>
+    <audio id="click-sound" preload="auto">
+        <source src="https://assets.codepen.io/217233/click.mp3" type="audio/mp3">
+    </audio>
+    
+    <!-- Loading Screen with Countdown -->
+    <div class="loading-screen" id="loading-screen">
+        <div class="countdown" id="countdown">3</div>
+        <div class="loading-logo">
+            <img src="https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg" alt="Jang Wonyoung">
+        </div>
+        <div class="loading-progress">
+            <div class="loading-progress-bar" id="loading-progress-bar"></div>
+        </div>
+        <div class="loading-text" id="loading-text">Đang chuẩn bị vũ trụ</div>
+    </div>
+    
+    <!-- Welcome Screen -->
+    <section class="welcome-screen" id="welcome-screen">
+        
+        <div class="welcome-card">
+            <h1 class="welcome-title" data-text="JANG WONYOUNG">JANG WONYOUNG</h1>
+            <p class="welcome-subtitle">Thiên hà kỳ diệu</p>
+            <div class="enter-button-container">
+                <button class="enter-button" id="enter-button">
+                    Khám phá vũ trụ
+                </button>
+                <div class="button-particles" id="button-particles"></div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Main Gallery Section -->
+    <main class="gallery-container" id="gallery-container">
+        <!-- Navigation Bar -->
+        <nav class="main-nav">
+            <div class="logo">
+                <img src="https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg" alt="Jang Wonyoung Logo">
+                <span>Vũ Trụ Wonyoung</span>
+            </div>
+            <div class="nav-controls">
+                <div class="view-toggle">
+                    <button class="view-btn active" data-view="grid">
+                        <i class="fas fa-th"></i>
+                        <span>Grid</span>
+                    </button>
+                    <button class="view-btn" data-view="carousel">
+                        <i class="fas fa-cube"></i>
+                        <span>3D</span>
+                    </button>
+                    <button class="view-btn" data-view="galaxy">
+                        <i class="fas fa-globe"></i>
+                        <span>Galaxy</span>
+                    </button>
+                </div>
+                <div class="theme-toggle">
+                    <button id="theme-toggle-btn">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                </div>
+                <div class="language-selector">
+                    <select id="language-select">
+                        <option value="vi">Tiếng Việt</option>
+                        <option value="en">English</option>
+                        <option value="ko">한국어</option>
+                    </select>
+                </div>
+                <!-- Thêm nút điều chỉnh âm lượng -->
+                <div class="sound-control">
+                    <button class="sound-toggle" id="gallery-sound-toggle">
+                        <i class="fas fa-volume-up" id="gallery-sound-icon"></i>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all">Tất cả</button>
+                <button class="filter-btn" data-filter="event">Sự kiện</button>
+                <button class="filter-btn" data-filter="photoshoot">Photoshoot</button>
+                <button class="filter-btn" data-filter="stage">Stage</button>
+                <button class="filter-btn" data-filter="daily">Daily</button>
+            </div>
+            <div class="filter-group time-filter">
+                <select id="year-filter">
+                    <option value="all">Mọi năm</option>
+                    <option value="2023">2023</option>
+                    <option value="2022">2022</option>
+                    <option value="2021">2021</option>
+                    <option value="2020">2020</option>
+                </select>
+            </div>
+            <div class="search-box">
+                <input type="text" placeholder="Tìm kiếm...">
+                <button><i class="fas fa-search"></i></button>
+            </div>
+        </div>
+
+        <!-- Gallery Views Container -->
+        <div class="gallery-views">
+            <!-- Grid View -->
+            <div class="gallery-view grid-view active" id="grid-view">
+                <div class="gallery-grid">
+                    <!-- Grid items will be inserted by JavaScript -->
+                </div>
+            </div>
+
+            <!-- 3D Carousel View -->
+            <div class="gallery-view carousel-view" id="carousel-view">
+                <div class="carousel-container">
+                    <!-- 3D carousel will be created with Three.js -->
+                </div>
+                <div class="carousel-controls">
+                    <button class="carousel-prev"><i class="fas fa-chevron-left"></i></button>
+                    <button class="carousel-next"><i class="fas fa-chevron-right"></i></button>
+                </div>
+            </div>
+
+            <!-- Galaxy View -->
+            <div class="gallery-view galaxy-view" id="galaxy-view">
+                <div class="galaxy-container">
+                    <!-- Galaxy view will be created with Three.js -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Lightbox for Image View -->
+    <div class="lightbox" id="lightbox">
+        <div class="lightbox-overlay"></div>
+        <div class="lightbox-content">
+            <div class="lightbox-header">
+                <h3 class="lightbox-title">Image Title</h3>
+                <button class="lightbox-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="lightbox-image-container">
+                <img src="" alt="Jang Wonyoung" class="lightbox-image">
+            </div>
+            <div class="lightbox-details">
+                <div class="lightbox-info">
+                    <div class="info-item">
+                        <span class="info-label">Sự kiện:</span>
+                        <span class="info-value" id="event-info">Music Bank</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Ngày:</span>
+                        <span class="info-value" id="date-info">12/06/2023</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Outfit:</span>
+                        <span class="info-value" id="outfit-info">Blue Dress</span>
+                    </div>
+                </div>
+                <div class="lightbox-actions">
+                    <button class="action-btn favorite-btn">
+                        <i class="far fa-heart"></i>
+                        <span>Yêu thích</span>
+                    </button>
+                    <button class="action-btn download-btn">
+                        <i class="fas fa-download"></i>
+                        <span>Tải về</span>
+                    </button>
+                    <button class="action-btn share-btn">
+                        <i class="fas fa-share-alt"></i>
+                        <span>Chia sẻ</span>
+                    </button>
+                </div>
+            </div>
+            <div class="lightbox-nav">
+                <button class="lightbox-prev"><i class="fas fa-chevron-left"></i></button>
+                <button class="lightbox-next"><i class="fas fa-chevron-right"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline Section -->
+    <section class="timeline-section" id="timeline-section">
+        <h2 class="section-title">Chặng đường của Wonyoung</h2>
+        <div class="timeline-container">
+            <div class="timeline-line"></div>
+            <div class="timeline-events">
+                <!-- Timeline events will be added by JavaScript -->
+            </div>
+        </div>
+    </section>
+
+    <!-- AR Mode Viewer -->
+    <div class="ar-viewer" id="ar-viewer">
+        <div class="ar-container">
+            <!-- AR content will be created with Three.js and AR.js -->
+        </div>
+        <div class="ar-controls">
+            <button class="ar-close"><i class="fas fa-times"></i></button>
+            <button class="ar-rotate"><i class="fas fa-sync"></i></button>
+            <button class="ar-zoom-in"><i class="fas fa-search-plus"></i></button>
+            <button class="ar-zoom-out"><i class="fas fa-search-minus"></i></button>
+        </div>
+    </div>
+
+    <!-- Music Player -->
+    <div class="music-player" id="music-player">
+        <div class="player-toggle">
+            <button id="player-toggle-btn">
+                <i class="fas fa-music"></i>
+            </button>
+        </div>
+        <div class="player-container">
+            <div class="player-info">
+                <img src="https://i.imgur.com/uKQqsuA.jpg" alt="Album Art" class="album-art">
+                <div class="track-info">
+                    <span class="track-name">Love Dive</span>
+                    <span class="artist-name">IVE</span>
+                </div>
+            </div>
+            <div class="player-controls">
+                <button class="player-prev"><i class="fas fa-step-backward"></i></button>
+                <button class="player-play"><i class="fas fa-play"></i></button>
+                <button class="player-next"><i class="fas fa-step-forward"></i></button>
+            </div>
+            <div class="player-timeline">
+                <div class="timeline-progress"></div>
+            </div>
+            <div class="player-volume">
+                <i class="fas fa-volume-up"></i>
+                <input type="range" min="0" max="100" value="80" class="volume-slider">
+            </div>
+        </div>
+    </div>
+
+    <!-- Favorites Collection -->
+    <div class="favorites-drawer" id="favorites-drawer">
+        <div class="drawer-header">
+            <h3>Bộ sưu tập yêu thích</h3>
+            <button class="drawer-close"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="favorites-container">
+            <!-- Favorite items will be added dynamically -->
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="script.js"></script>
+</body>
+</html> 
