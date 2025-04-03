@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vũ Trụ Jang Wonyoung | Gallery</title>
-    
+    <!-- Mặc định ảnh sample là https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg -->
     <!-- Favicon -->
     <link rel="icon" href="https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg" type="image/jpg">
     
@@ -169,11 +169,14 @@
     <div id="canvas-container"></div>
     <div class="noise-overlay"></div>
     
+    <!-- NEW Page Transition Overlay -->
+    <div class="page-transition-overlay" id="page-transition-overlay"></div>
+    
     <!-- Transition Overlay -->
     <div class="transition-overlay" id="transition-overlay"></div>
     
     <!-- Audio Resources -->
-    <audio id="background-music" loop preload="auto">
+    <audio id="background-music" loop preload="auto" style="z-index: 10000;">
         <source src="mlem.mp3" type="audio/mp3">
     </audio>
     <audio id="hover-sound" preload="auto">
@@ -199,7 +202,7 @@
     <section class="welcome-screen" id="welcome-screen">
         
         <div class="welcome-card">
-            <h1 class="welcome-title" data-text="JANG WONYOUNG">JANG WONYOUNG</h1>
+            <h1 class="welcome-title" data-text="WONYOUNG">WONYOUNG</h1>
             <p class="welcome-subtitle">Thiên hà kỳ diệu</p>
             <div class="enter-button-container">
                 <button class="enter-button" id="enter-button">
@@ -215,7 +218,7 @@
         <!-- Navigation Bar -->
         <nav class="main-nav">
             <div class="logo">
-                <img src="https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg" alt="Jang Wonyoung Logo">
+                <img src="https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg" alt="Wonyoung Logo">
                 <span>Vũ Trụ Wonyoung</span>
             </div>
             <div class="nav-controls">
@@ -355,14 +358,26 @@
         </div>
     </div>
 
-    <!-- Timeline Section -->
-    <section class="timeline-section" id="timeline-section">
+    <!-- Timeline Section - Removed -->
+    <!-- 
+    <section id="timeline-section" class="timeline-section">
+        <div class="cosmic-background">
+            <div class="cosmic-stars"></div>
+            <div class="cosmic-nebula"></div>
+        </div>
         <h2 class="section-title">Chặng đường của Wonyoung</h2>
         <div class="timeline-container">
             <div class="timeline-line"></div>
-            <div class="timeline-events">
-                <!-- Timeline events will be added by JavaScript -->
-            </div>
+            <div class="timeline-events"></div>
+        </div>
+    </section>
+    -->
+
+    <!-- Image Journey Section -->
+    <section id="image-journey-section" class="image-journey-section" style="display: none;">
+        <h2 class="section-title">Hành Trình Ảnh</h2>
+        <div class="image-journey-container">
+            <!-- Image items will be inserted by JavaScript -->
         </div>
     </section>
 
@@ -380,7 +395,7 @@
     </div>
 
     <!-- Music Player -->
-    <div class="music-player" id="music-player">
+    <div class="music-player active" id="music-player">
         <div class="player-toggle">
             <button id="player-toggle-btn">
                 <i class="fas fa-music"></i>
@@ -388,15 +403,15 @@
         </div>
         <div class="player-container">
             <div class="player-info">
-                <img src="https://i.imgur.com/uKQqsuA.jpg" alt="Album Art" class="album-art">
+                <img src="https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg" alt="Album Art" class="album-art">
                 <div class="track-info">
-                    <span class="track-name">Love Dive</span>
-                    <span class="artist-name">IVE</span>
+                    <span class="track-name">Mlem</span>
+                    <span class="artist-name">IVE - Wonyoung</span>
                 </div>
             </div>
             <div class="player-controls">
                 <button class="player-prev"><i class="fas fa-step-backward"></i></button>
-                <button class="player-play"><i class="fas fa-play"></i></button>
+                <button class="player-play"><i class="fas fa-pause"></i></button>
                 <button class="player-next"><i class="fas fa-step-forward"></i></button>
             </div>
             <div class="player-timeline">
@@ -404,7 +419,7 @@
             </div>
             <div class="player-volume">
                 <i class="fas fa-volume-up"></i>
-                <input type="range" min="0" max="100" value="80" class="volume-slider">
+                <input type="range" min="0" max="100" value="30" class="volume-slider">
             </div>
         </div>
     </div>
@@ -421,6 +436,17 @@
     </div>
     
     <!-- Scripts -->
+    <script>
+        console.log('Page loaded, about to execute script.js');
+        // Debug global elements
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM fully loaded');
+            console.log('welcome-screen exists:', !!document.getElementById('welcome-screen'));
+            console.log('enter-button exists:', !!document.getElementById('enter-button'));
+            console.log('page-transition-overlay exists:', !!document.getElementById('page-transition-overlay'));
+            console.log('background-music exists:', !!document.getElementById('background-music'));
+        });
+    </script>
     <script src="script.js"></script>
 </body>
 </html> 

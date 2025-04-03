@@ -1,28 +1,65 @@
-document.addEventListener('DOMContentLoaded', function() {
-    // Tạo hiệu ứng space dust
-    createSpaceDust();
-    
-    // Initialize loading sequence
-    initLoading();
-    
-    // Initialize Three.js background
+// Global variables
+let isPlaying = false;
+let backgroundMusic;
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Three.js background immediately
     initThreeJSBackground();
     
-    // Initialize welcome screen elements
-    initWelcomeScreen();
+    // Always initialize audio basic settings (doesn't play)
+    initAudio(); 
     
-    // Handle audio controls and autoplay music
-    initAudio(true); // Pass true to autoplay
+    const loadingScreen = document.getElementById('loading-screen');
+    const welcomeScreen = document.getElementById('welcome-screen');
+    const galleryContainer = document.getElementById('gallery-container');
     
-    // Button particles effect
-    initButtonParticles();
+    // Remove the check for 'from=transition'
+    // const urlParams = new URLSearchParams(window.location.search);
+    // const fromTransition = urlParams.get('from') === 'transition';
     
-    // Ẩn timeline mặc định
-    const timelineSection = document.getElementById('timeline-section');
-    if (timelineSection) {
-        timelineSection.style.display = 'none';
+    // Always start with the loading sequence, which then shows the welcome screen
+    if (loadingScreen && welcomeScreen) {
+        // Start loading sequence - USE initLoading instead of startLoadingSequence
+        initLoading(() => { // <--- CORRECTED FUNCTION NAME
+            // After loading, show welcome screen
+            loadingScreen.style.display = 'none';
+            welcomeScreen.style.display = 'flex'; // Or 'block' depending on CSS
+            
+            // Initialize welcome screen interactions (which handles gallery init on button click)
+            initWelcomeScreen();
+            
+            // Initialize music player structure here, but don't force play.
+            // Actual play is triggered by the welcome screen button click.
+            initMusicPlayer();
+            
+        });
+    } else {
+        // Fallback if loading/welcome screens are missing
+        console.warn("Loading or Welcome screen not found. Attempting to show gallery directly.");
+        if (galleryContainer) galleryContainer.style.display = 'block'; // Or flex, grid etc.
+        
+        // Initialize gallery directly in this fallback case
+        initGallery(); 
+        initMusicPlayer();
+        
+        // Attempt to play music immediately in this fallback case
+        setTimeout(() => {
+             const playButton = document.querySelector('.player-play');
+             if (playButton && backgroundMusic && backgroundMusic.paused) {
+                 playButton.click();
+             } else if (backgroundMusic && backgroundMusic.paused) {
+                 // Less ideal fallback if button isn't ready
+                 backgroundMusic.play().catch(e => console.error("Fallback direct play failed", e));
+             }
+        }, 500);
     }
+
+    // Space dust might be part of ThreeJS now, or needs separate handling
+    // createSpaceDust(); 
 });
+
+// Global flag to prevent multiple gallery initializations (optional, can be useful)
+// let galleryInitialized = false;
 
 // Tạo hiệu ứng không gian - space dust
 function createSpaceDust() {
@@ -59,7 +96,7 @@ function createSpaceDust() {
     }
 }
 
-function initLoading() {
+function initLoading(callback) {
     const loadingScreen = document.getElementById('loading-screen');
     const countdownElement = document.getElementById('countdown');
     const progressBar = document.getElementById('loading-progress-bar');
@@ -144,6 +181,12 @@ function initLoading() {
                             
                             document.querySelector('.enter-button-container').style.opacity = 1;
                             document.querySelector('.enter-button-container').style.transform = 'translateY(0)';
+                            
+                            // Gọi callback nếu được cung cấp
+                            if (typeof callback === 'function') {
+                                callback();
+                            }
+                            
                         }, 1000);
                     }
                 }, 100);
@@ -367,121 +410,398 @@ function initThreeJSBackground() {
                 
                 setTimeout(() => {
                     transitionOverlay.classList.remove('active');
-                }, 500);
-            }, 500);
+                }, 300);
+            }, 300);
         }
     };
 }
 
+// Function to initialize welcome screen and handle interactions
 function initWelcomeScreen() {
-    const enterButton = document.getElementById('enter-button');
+    console.log('Initializing welcome screen');
     const welcomeScreen = document.getElementById('welcome-screen');
+    const welcomeCard = document.querySelector('.welcome-card');
+    const enterButton = document.getElementById('enter-button');
     const galleryContainer = document.getElementById('gallery-container');
-    const timelineSection = document.getElementById('timeline-section');
+    const pageTransitionOverlay = document.getElementById('page-transition-overlay');
     
-    // Enter button effect
+    if (!welcomeScreen || !enterButton || !welcomeCard) {
+        console.error('Welcome screen, card, or enter button not found');
+        return;
+    }
+    
+    // Make sure page transition overlay is ready
+    if (!pageTransitionOverlay) {
+        console.warn('Page transition overlay not found, creating one');
+        const newOverlay = document.createElement('div');
+        newOverlay.id = 'page-transition-overlay';
+        newOverlay.className = 'page-transition-overlay';
+        document.body.appendChild(newOverlay);
+    }
+    
+    // Initialize welcome screen particles
+    initButtonParticles();
+    
+    // Add hover sound to enter button
     enterButton.addEventListener('mouseenter', () => {
-        // Create particles when hovering
-        enterButton.style.transform = 'translateY(-2px) scale(1.05)';
-        enterButton.style.boxShadow = '0 8px 25px rgba(157, 78, 221, 0.7)';
-        document.getElementById('hover-sound').play().catch(e => console.log('Audio play prevented: ', e));
+        const hoverSound = document.getElementById('hover-sound');
+        if (hoverSound) {
+            hoverSound.currentTime = 0;
+            hoverSound.play().catch(e => console.log('Cannot play hover sound:', e));
+        }
     });
     
-    enterButton.addEventListener('mouseleave', () => {
-        enterButton.style.transform = '';
-        enterButton.style.boxShadow = '';
-    });
-    
-    // Enter button click will transition to gallery view
+    // Add click event to enter button with enhanced transition using GSAP Timeline
+    console.log('Adding click listener to enter button for enhanced transition');
     enterButton.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
+        console.log('Enter button clicked - Starting enhanced cosmic journey');
         
-        // Trigger space warp effect
-        window.galaxyFunctions.setWarpSpeed(true);
+        // Play click sound
+        document.getElementById('click-sound')?.play().catch(e => console.log('Audio play prevented: ', e));
         
-        // Hide welcome screen with animation
-        welcomeScreen.style.opacity = '0';
-        welcomeScreen.style.transform = 'translateY(-20px) scale(0.9)';
+        // GSAP Timeline for coordinated animations
+        const tl = gsap.timeline({
+            onComplete: () => {
+                console.log('Transition complete, gallery revealed');
+                // Callback after the entire timeline finishes
+                welcomeScreen.style.display = 'none'; // Ensure welcome screen is hidden
+            }
+        });
         
-        // Use transition overlay
-        setTimeout(() => {
-            window.galaxyFunctions.triggerTransition(() => {
-                welcomeScreen.style.display = 'none';
-                
-                // Show gallery
-                galleryContainer.style.display = 'block';
-                
-                // Show timeline section
-                if (timelineSection) {
-                    timelineSection.style.display = 'block';
-                    
-                    // Force reflow to ensure animations work
-                    void timelineSection.offsetWidth;
-                    
-                    // Add entrance animation class
-                    timelineSection.classList.add('timeline-activated');
-                }
-                
-                // Force reflow
-                void galleryContainer.offsetWidth;
-                
-                // Start animations
-                galleryContainer.classList.add('active');
-                
-                // Return camera to normal
-                setTimeout(() => {
-                    window.galaxyFunctions.setWarpSpeed(false);
-                }, 500);
-                
-                // Initialize gallery content
-                initGallery();
-            });
-        }, 1000);
+        const canvas = document.getElementById('canvas-container');
+        
+        tl
+        // 1. Animate Welcome Card Out
+        .to(welcomeCard, {
+            opacity: 0,
+            scale: 0.8,
+            y: -100, // Fly up slightly
+            duration: 0.6,
+            ease: "power3.in"
+        }, 0) // Start at time 0
+        
+        // 2. Zoom Canvas and Fade (More dramatic)
+        .to(canvas, {
+            scale: 3, // Zoom in more
+            opacity: 0.5,
+            duration: 1.0, // Slightly faster zoom
+            ease: "power3.in"
+        }, 0.1) // Start slightly after card animation begins
+        
+        // 3. Activate Page Transition Overlay (Fade in)
+        .to(pageTransitionOverlay, {
+            opacity: 1,
+            duration: 0.7, 
+            ease: "power2.inOut",
+            onStart: () => pageTransitionOverlay.classList.add('active')
+        }, 0.5) // Start overlay fade in mid-zoom
+        
+        // --- Actions after overlay is fully opaque --- 
+        .add(() => {
+            console.log('Overlay active, preparing gallery');
+            // Hide welcome screen immediately
+            welcomeScreen.style.display = 'none';
+            
+            // Prepare gallery for display
+            galleryContainer.style.display = 'flex';
+            galleryContainer.style.opacity = '0';
+            
+            // Initialize gallery content
+            initSimpleGallery();
+            
+            // Ensure music is playing
+            if (backgroundMusic && backgroundMusic.paused) {
+                backgroundMusic.play().catch(e => console.error('Could not autoplay music:', e));
+                isPlaying = true;
+                updateSoundIcons();
+            }
+        }, ">-=0.1") // Execute slightly before overlay finishes fading in
+        
+        // 4. Reset Canvas and Fade Out Overlay to reveal Gallery
+        .to(canvas, {
+            scale: 1, // Reset zoom
+            opacity: 1,
+            duration: 1.2, // Smooth transition back
+            ease: "power3.out"
+        }, "+=0.2") // Start after a short pause
+        
+        .to(galleryContainer, {
+            opacity: 1,
+            duration: 1.0, // Fade in gallery
+            ease: "power2.out"
+        }, "<+0.3") // Start gallery fade-in slightly after canvas starts resetting
+        
+        // Animate gallery items entrance within the main timeline
+        .fromTo('.grid-item', 
+            { y: 50, opacity: 0 },
+            { 
+                y: 0, 
+                opacity: 1, 
+                duration: 0.8, 
+                stagger: 0.05,
+                ease: "power2.out"
+            }, "<+0.5") // Stagger items after gallery starts fading in
+        
+        .to(pageTransitionOverlay, {
+            opacity: 0,
+            duration: 0.8, // Fade out overlay
+            ease: "power2.out",
+            onComplete: () => pageTransitionOverlay.classList.remove('active')
+        }, "<+0.2"); // Start fading out overlay as gallery reveals
     });
 }
 
-function initAudio(autoplay = false) {
-    const backgroundMusic = document.getElementById('background-music');
-    const soundToggle = document.getElementById('sound-toggle');
-    const soundIcon = document.getElementById('sound-icon');
-    let isMuted = !autoplay; // If autoplay is true, we start with sound on
+// New simple gallery initialization function without 3D
+function initSimpleGallery() {
+    console.log('Initializing simple gallery');
+    const galleryContainer = document.getElementById('gallery-container');
     
-    // Set music source to mlem.mp3
-    backgroundMusic.src = 'mlem.mp3';
+    if (!galleryContainer) {
+        console.error('Gallery container not found');
+        return;
+    }
     
-    // Set initial state of music
-    if (!isMuted) {
-        backgroundMusic.volume = 0.3; // Set to 30% volume
-        soundIcon.className = 'fas fa-volume-up';
-        
-        // Try to play music automatically
-        const playPromise = backgroundMusic.play();
-        
-        // Handle autoplay restrictions
-        if (playPromise !== undefined) {
-            playPromise.catch(() => {
-                console.log('Autoplay prevented. User must interact first.');
-                isMuted = true;
-                soundIcon.className = 'fas fa-volume-mute';
+    // Create a clean, minimalist header
+    const header = document.createElement('header');
+    header.className = 'gallery-header';
+    header.innerHTML = `
+        <h1 class="gallery-title">Bộ Sưu Tập Wonyoung</h1>
+        <p class="gallery-subtitle">Khám phá hình ảnh tuyệt đẹp</p>
+    `;
+    
+    // Create gallery content
+    const galleryContent = document.createElement('div');
+    galleryContent.className = 'gallery-content';
+    galleryContent.innerHTML = `
+        <div class="gallery-grid" id="gallery-grid"></div>
+        <div class="continue-button-container">
+            <button class="continue-button" id="continue-button">
+                Tiếp Tục Hành Trình
+                <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    `;
+    
+    // Clear existing content
+    galleryContainer.innerHTML = '';
+    
+    // Add new elements
+    galleryContainer.appendChild(header);
+    galleryContainer.appendChild(galleryContent);
+    
+    // Load gallery images
+    loadGalleryImages();
+    
+    // Add event listener to continue button
+    setTimeout(() => {
+        const continueButton = document.getElementById('continue-button');
+        if (continueButton) {
+            continueButton.addEventListener('click', () => {
+                // Transition to Image Journey section
+                const pageTransitionOverlay = document.getElementById('page-transition-overlay');
+                if (pageTransitionOverlay) {
+                    pageTransitionOverlay.classList.add('active');
+                    
+                    setTimeout(() => {
+                        // Hide gallery with first design
+                        galleryContainer.style.opacity = '0';
+                        
+                        // Load second gallery design
+                        setTimeout(() => {
+                            initGalleryTwo();
+                            
+                            // Hide overlay
+                            pageTransitionOverlay.classList.remove('active');
+                        }, 600);
+                    }, 500);
+                }
             });
+        }
+    }, 1000);
+    
+    // Initialize music player UI
+    initMusicPlayer();
+}
+
+// Second gallery design with different UX
+function initGalleryTwo() {
+    console.log('Initializing gallery design two');
+    const galleryContainer = document.getElementById('gallery-container');
+    
+    if (!galleryContainer) {
+        console.error('Gallery container not found');
+        return;
+    }
+    
+    // Reset gallery container
+    galleryContainer.style.opacity = '0';
+    
+    // Change gallery structure for a new experience
+    galleryContainer.innerHTML = `
+        <header class="gallery-header-two">
+            <h1 class="gallery-title-two">Hành Trình Wonyoung</h1>
+            <p class="gallery-subtitle-two">Trải nghiệm khác biệt</p>
+        </header>
+        
+        <div class="gallery-timeline" id="gallery-timeline"></div>
+        
+        <div class="navigation-controls">
+            <button class="nav-button prev-button">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="pagination-indicator" id="pagination-indicator"></div>
+            <button class="nav-button next-button">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    `;
+    
+    // Load timeline data
+    loadTimelineContent();
+    
+    // Set up navigation controls
+    setupTimelineNavigation();
+    
+    // Fade in the new gallery
+    setTimeout(() => {
+        galleryContainer.style.opacity = '1';
+        
+        // Animate timeline items
+        const timelineItems = document.querySelectorAll('.timeline-item');
+        gsap.fromTo(timelineItems, 
+            { x: -100, opacity: 0 },
+            { 
+                x: 0, 
+                opacity: 1, 
+                duration: 0.8, 
+                stagger: 0.2,
+                ease: "back.out(1.5)"
+            }
+        );
+    }, 100);
+}
+
+// Function to initialize audio and ensure it auto-plays
+function initAudio() {
+    console.log('Initializing audio...');
+    
+    // Get the background music element
+    backgroundMusic = document.getElementById('background-music');
+    if (!backgroundMusic) {
+        console.error('Background music element not found');
+        return;
+    }
+    
+    // Ensure the music source is set
+    if (backgroundMusic.querySelector('source').src.includes('mlem.mp3')) {
+        console.log('Music source already set to mlem.mp3');
+    } else {
+        console.log('Setting music source to mlem.mp3');
+        backgroundMusic.querySelector('source').src = 'mlem.mp3';
+    }
+    
+    // Set volume to 30%
+    backgroundMusic.volume = 0.3;
+    
+    // Force autoplay without user interaction
+    const attemptPlay = () => {
+        backgroundMusic.play()
+            .then(() => {
+                console.log('Background music started automatically');
+                // isPlaying and icons are now handled by onplay listener
+            })
+            .catch(error => {
+                console.warn('Auto-play prevented by browser:', error);
+                // If autoplay is prevented, try again after a short delay
+                // No longer retrying indefinitely here, browser interaction needed.
+                // setTimeout(attemptPlay, 1000);
+            });
+    };
+    
+    // Initial play attempt
+    attemptPlay();
+    
+    // Also attempt playback when visibility changes
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && backgroundMusic.paused) {
+            console.log('Page became visible, attempting to restart music');
+            backgroundMusic.play().catch(e => console.warn('Could not play music on visibility change', e));
+        }
+    });
+
+    // Add core event listeners for play/pause state management
+    backgroundMusic.addEventListener('play', () => {
+        console.log('Music playing, isPlaying set to true');
+        isPlaying = true;
+        updateSoundIcons();
+    });
+
+    backgroundMusic.addEventListener('pause', () => {
+        console.log('Music paused, isPlaying set to false');
+        isPlaying = false;
+        updateSoundIcons();
+    });
+
+    // Add event listeners for general sound toggle buttons (like in header/gallery)
+    const soundToggleButtons = document.querySelectorAll('.sound-toggle');
+    soundToggleButtons.forEach(button => {
+        button.addEventListener('click', toggleMusic);
+    });
+    
+    // REMOVED: Setup play next track handling (only one track now)
+    // backgroundMusic.addEventListener('ended', () => {
+    //     console.log('Track ended, playing next track');
+    //     playNextTrack();
+    // });
+    
+    // REMOVED: Initial update of all sound icons (now handled by play/pause listeners)
+    // updateSoundIcons();
+}
+
+// Define the updateSoundIcons function (if not already defined)
+function updateSoundIcons() {
+    // Update all sound toggle icons
+    const soundIcons = document.querySelectorAll('.sound-toggle i');
+    const playerPlayIcon = document.querySelector('.player-play i');
+    
+    soundIcons.forEach(icon => {
+        if (isPlaying) {
+            if (icon.classList.contains('fa-volume-xmark')) {
+                icon.classList.remove('fa-volume-xmark');
+                icon.classList.add('fa-volume-high');
+            }
+        } else {
+            if (icon.classList.contains('fa-volume-high')) {
+                icon.classList.remove('fa-volume-high');
+                icon.classList.add('fa-volume-xmark');
+            }
+        }
+    });
+    
+    // Update player play button icon
+    if (playerPlayIcon) {
+        if (isPlaying) {
+            if (playerPlayIcon.classList.contains('fa-play')) {
+                playerPlayIcon.classList.remove('fa-play');
+                playerPlayIcon.classList.add('fa-pause');
+            }
+        } else {
+            if (playerPlayIcon.classList.contains('fa-pause')) {
+                playerPlayIcon.classList.remove('fa-pause');
+                playerPlayIcon.classList.add('fa-play');
+            }
         }
     }
     
-    // Toggle sound
-    soundToggle.addEventListener('click', () => {
-        isMuted = !isMuted;
-        if (isMuted) {
-            backgroundMusic.pause();
-            soundIcon.className = 'fas fa-volume-mute';
+    // Also update any welcome screen icon if it exists
+    const welcomeScreenSoundIcon = document.querySelector('.welcome-screen .sound-toggle i');
+    if (welcomeScreenSoundIcon) {
+        if (isPlaying) {
+            welcomeScreenSoundIcon.className = 'fas fa-volume-high';
         } else {
-            backgroundMusic.volume = 0.3; // Set to 30% volume
-            backgroundMusic.play().catch(() => {
-                // Handle autoplay restrictions
-                console.log('Autoplay prevented. User must interact first.');
-            });
-            soundIcon.className = 'fas fa-volume-up';
+            welcomeScreenSoundIcon.className = 'fas fa-volume-xmark';
         }
-    });
+    }
 }
 
 function initButtonParticles() {
@@ -522,832 +842,49 @@ function initButtonParticles() {
     });
 }
 
-// Gallery initialization function
+// Function to initialize gallery
 function initGallery() {
-    loadGalleryImages();
-    initViewToggle();
-    initFilters();
-    initLightbox();
-    initThreeDCarousel();
-    initGalaxyView();
-    initTimeline();
-    initMusicPlayer();
-    initFavorites();
-    initARViewer();
-    initThemeToggle();
-    initLanguageSelector();
+    console.log('Initializing gallery with new approach');
+    
+    try {
+        // Khởi tạo gallery đơn giản
+        initSimpleGallery();
+        
+        // Khởi tạo music player
+        initMusicPlayer();
+    } catch (error) {
+        console.error('Error initializing gallery:', error);
+    }
 }
 
 // Function to load gallery images with Wonyoung images
 function loadGalleryImages() {
     const galleryGrid = document.querySelector('.gallery-grid');
     
-    // Generate gallery items
-    const galleryItems = generateGalleryItems();
-    
-    // Clear existing content
-    galleryGrid.innerHTML = '';
-    
-    // Add items to grid
-    galleryItems.forEach(item => {
-        const gridItem = document.createElement('div');
-        gridItem.className = 'grid-item';
-        gridItem.dataset.id = item.id;
-        gridItem.dataset.category = item.category;
-        gridItem.dataset.year = item.year;
-        
-        gridItem.innerHTML = `
-            <img src="${item.image}" alt="${item.title}">
-            <div class="grid-item-info">
-                <h3 class="grid-item-title">${item.title}</h3>
-                <p class="grid-item-subtitle">${item.event} - ${item.date}</p>
-            </div>
-        `;
-        
-        gridItem.addEventListener('click', () => {
-            openLightbox(item);
-        });
-        
-        galleryGrid.appendChild(gridItem);
-    });
-}
-
-// Function to generate gallery items with Wonyoung default image
-function generateGalleryItems() {
-    const defaultImage = "https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg";
-    
-    // Sample gallery items with Wonyoung images
-    return [
-        {
-            id: 1,
-            title: 'Music Bank Performance',
-            event: 'Music Bank',
-            date: '2023-06-12',
-            category: 'stage',
-            year: '2023',
-            image: defaultImage,
-            outfit: 'Blue Dress'
-        },
-        {
-            id: 2,
-            title: 'Cosmopolitan Photoshoot',
-            event: 'Magazine Cover',
-            date: '2023-01-15',
-            category: 'photoshoot',
-            year: '2023',
-            image: defaultImage,
-            outfit: 'White Elegant Suit'
-        },
-        {
-            id: 3,
-            title: 'Inkigayo Performance',
-            event: 'Inkigayo',
-            date: '2022-12-04',
-            category: 'stage',
-            year: '2022',
-            image: defaultImage,
-            outfit: 'Red Performance Outfit'
-        },
-        {
-            id: 4,
-            title: 'Brand Ambassador Event',
-            event: 'Brand Event',
-            date: '2022-10-20',
-            category: 'event',
-            year: '2022',
-            image: defaultImage,
-            outfit: 'Pink Gown'
-        },
-        {
-            id: 5,
-            title: 'Airport Fashion',
-            event: 'Daily Life',
-            date: '2022-09-15',
-            category: 'daily',
-            year: '2022',
-            image: defaultImage,
-            outfit: 'Casual Streetwear'
-        },
-        {
-            id: 6,
-            title: 'After LIKE MV Behind',
-            event: 'Music Video',
-            date: '2022-08-22',
-            category: 'photoshoot',
-            year: '2022',
-            image: defaultImage,
-            outfit: 'MV Outfit'
-        },
-        {
-            id: 7,
-            title: 'KCON 2022',
-            event: 'Concert',
-            date: '2022-05-08',
-            category: 'stage',
-            year: '2022',
-            image: defaultImage,
-            outfit: 'Stage Outfit'
-        },
-        {
-            id: 8,
-            title: 'Fansign Event',
-            event: 'Fan Meeting',
-            date: '2022-04-16',
-            category: 'event',
-            year: '2022',
-            image: defaultImage,
-            outfit: 'Casual Elegant'
-        },
-        {
-            id: 9,
-            title: 'IVE Debut Showcase',
-            event: 'Showcase',
-            date: '2021-12-01',
-            category: 'stage',
-            year: '2021',
-            image: defaultImage,
-            outfit: 'ELEVEN Outfit'
-        },
-        {
-            id: 10,
-            title: 'Summer Vacation',
-            event: 'Daily Life',
-            date: '2021-08-10',
-            category: 'daily',
-            year: '2021',
-            image: defaultImage,
-            outfit: 'Summer Casual'
-        },
-        {
-            id: 11,
-            title: 'IZ*ONE Final Concert',
-            event: 'Concert',
-            date: '2021-03-14',
-            category: 'stage',
-            year: '2021',
-            image: defaultImage,
-            outfit: 'Formal Gown'
-        },
-        {
-            id: 12,
-            title: 'MAMA Awards',
-            event: 'Award Show',
-            date: '2020-12-06',
-            category: 'event',
-            year: '2020',
-            image: defaultImage,
-            outfit: 'Red Carpet Gown'
-        }
-    ];
-}
-
-// Function to handle view toggle
-function initViewToggle() {
-    const viewButtons = document.querySelectorAll('.view-btn');
-    const galleryViews = document.querySelectorAll('.gallery-view');
-    
-    viewButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const viewType = button.dataset.view;
-            document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-            
-            // Update active button
-            viewButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            
-            // Update active view
-            galleryViews.forEach(view => view.classList.remove('active'));
-            document.getElementById(`${viewType}-view`).classList.add('active');
-            
-            // If 3D carousel or galaxy view, initialize them
-            if (viewType === 'carousel') {
-                // Additional initialization for 3D carousel if needed
-            } else if (viewType === 'galaxy') {
-                // Additional initialization for galaxy view if needed
-            }
-        });
-    });
-}
-
-// Function to initialize filters
-function initFilters() {
-    const filterButtons = document.querySelectorAll('.filter-btn');
-    const yearFilter = document.getElementById('year-filter');
-    const searchInput = document.querySelector('.search-box input');
-    const gridItems = document.querySelectorAll('.grid-item');
-    
-    // Category filter
-    filterButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-            
-            filterButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-            
-            const category = button.dataset.filter;
-            
-            gridItems.forEach(item => {
-                if (category === 'all' || item.dataset.category === category) {
-                    item.style.display = 'block';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
-        });
-    });
-    
-    // Year filter
-    yearFilter.addEventListener('change', () => {
-        const year = yearFilter.value;
-        
-        gridItems.forEach(item => {
-            if (year === 'all' || item.dataset.year === year) {
-                if (item.style.display !== 'none') {
-                    item.style.display = 'block';
-                }
-            } else {
-                item.style.display = 'none';
-            }
-        });
-    });
-    
-    // Search functionality
-    searchInput.addEventListener('input', () => {
-        const searchTerm = searchInput.value.toLowerCase();
-        
-        gridItems.forEach(item => {
-            const title = item.querySelector('.grid-item-title').textContent.toLowerCase();
-            const subtitle = item.querySelector('.grid-item-subtitle').textContent.toLowerCase();
-            
-            if (title.includes(searchTerm) || subtitle.includes(searchTerm)) {
-                if (item.style.display !== 'none') {
-                    item.style.display = 'block';
-                }
-            } else {
-                item.style.display = 'none';
-            }
-        });
-    });
-}
-
-// Function to initialize lightbox
-function initLightbox() {
-    const lightbox = document.getElementById('lightbox');
-    const lightboxClose = document.querySelector('.lightbox-close');
-    const lightboxPrev = document.querySelector('.lightbox-prev');
-    const lightboxNext = document.querySelector('.lightbox-next');
-    
-    let currentImageIndex = 0;
-    const galleryItems = Array.from(document.querySelectorAll('.grid-item'));
-    
-    // Close lightbox
-    lightboxClose.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        lightbox.classList.remove('active');
-    });
-    
-    // Close on overlay click
-    lightbox.querySelector('.lightbox-overlay').addEventListener('click', () => {
-        lightbox.classList.remove('active');
-    });
-    
-    // Prevent closing when clicking on content
-    lightbox.querySelector('.lightbox-content').addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
-    
-    // Previous image
-    lightboxPrev.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        currentImageIndex = (currentImageIndex - 1 + galleryItems.length) % galleryItems.length;
-        const prevItem = galleryItems[currentImageIndex].dataset.id;
-        const item = getGalleryItemById(prevItem);
-        updateLightboxContent(item);
-    });
-    
-    // Next image
-    lightboxNext.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        currentImageIndex = (currentImageIndex + 1) % galleryItems.length;
-        const nextItem = galleryItems[currentImageIndex].dataset.id;
-        const item = getGalleryItemById(nextItem);
-        updateLightboxContent(item);
-    });
-    
-    // Key navigation
-    document.addEventListener('keydown', (e) => {
-        if (!lightbox.classList.contains('active')) return;
-        
-        if (e.key === 'Escape') {
-            lightbox.classList.remove('active');
-        } else if (e.key === 'ArrowLeft') {
-            lightboxPrev.click();
-        } else if (e.key === 'ArrowRight') {
-            lightboxNext.click();
-        }
-    });
-    
-    // Favorite button
-    const favoriteBtn = document.querySelector('.favorite-btn');
-    favoriteBtn.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        
-        const icon = favoriteBtn.querySelector('i');
-        if (icon.classList.contains('far')) {
-            icon.classList.remove('far');
-            icon.classList.add('fas');
-            favoriteBtn.style.color = '#e84393';
-            
-            // Add to favorites
-            const currentItemId = document.querySelector('.lightbox-image').dataset.id;
-            addToFavorites(getGalleryItemById(currentItemId));
-        } else {
-            icon.classList.remove('fas');
-            icon.classList.add('far');
-            favoriteBtn.style.color = '';
-            
-            // Remove from favorites
-            const currentItemId = document.querySelector('.lightbox-image').dataset.id;
-            removeFromFavorites(currentItemId);
-        }
-    });
-    
-    // Download button
-    const downloadBtn = document.querySelector('.download-btn');
-    downloadBtn.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        
-        const imageUrl = document.querySelector('.lightbox-image').src;
-        const a = document.createElement('a');
-        a.href = imageUrl;
-        a.download = `wonyoung-${Date.now()}.jpg`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    });
-    
-    // Share button
-    const shareBtn = document.querySelector('.share-btn');
-    shareBtn.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        
-        // Check if Web Share API is supported
-        if (navigator.share) {
-            navigator.share({
-                title: document.querySelector('.lightbox-title').textContent,
-                text: 'Check out this amazing Jang Wonyoung photo!',
-                url: window.location.href
-            }).catch(err => {
-                console.log('Error sharing:', err);
-            });
-        } else {
-            // Fallback - copy URL to clipboard
-            const dummyInput = document.createElement('input');
-            document.body.appendChild(dummyInput);
-            dummyInput.value = window.location.href;
-            dummyInput.select();
-            document.execCommand('copy');
-            document.body.removeChild(dummyInput);
-            
-            alert('URL copied to clipboard!');
-        }
-    });
-}
-
-// Function to open lightbox
-function openLightbox(item) {
-    const lightbox = document.getElementById('lightbox');
-    const lightboxImage = document.querySelector('.lightbox-image');
-    const galleryItems = Array.from(document.querySelectorAll('.grid-item'));
-    
-    // Set current index
-    currentImageIndex = galleryItems.findIndex(gridItem => gridItem.dataset.id == item.id);
-    
-    // Update content
-    updateLightboxContent(item);
-    
-    // Show lightbox
-    lightbox.classList.add('active');
-    document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-    
-    // Add zoom functionality
-    lightboxImage.addEventListener('click', () => {
-        if (lightboxImage.classList.contains('zoomed')) {
-            lightboxImage.classList.remove('zoomed');
-            lightboxImage.style.transform = '';
-        } else {
-            lightboxImage.classList.add('zoomed');
-            lightboxImage.style.transform = 'scale(1.5)';
-        }
-    });
-}
-
-// Function to update lightbox content
-function updateLightboxContent(item) {
-    const lightboxImage = document.querySelector('.lightbox-image');
-    const lightboxTitle = document.querySelector('.lightbox-title');
-    const eventInfo = document.getElementById('event-info');
-    const dateInfo = document.getElementById('date-info');
-    const outfitInfo = document.getElementById('outfit-info');
-    
-    // Reset zoom
-    lightboxImage.classList.remove('zoomed');
-    lightboxImage.style.transform = '';
-    
-    // Update image with fade effect
-    lightboxImage.style.opacity = 0;
-    setTimeout(() => {
-        lightboxImage.src = item.image;
-        lightboxImage.dataset.id = item.id;
-        lightboxImage.style.opacity = 1;
-    }, 300);
-    
-    // Update details
-    lightboxTitle.textContent = item.title;
-    eventInfo.textContent = item.event;
-    dateInfo.textContent = item.date;
-    outfitInfo.textContent = item.outfit;
-    
-    // Check if in favorites
-    const favoriteBtn = document.querySelector('.favorite-btn');
-    const icon = favoriteBtn.querySelector('i');
-    
-    if (isInFavorites(item.id)) {
-        icon.classList.remove('far');
-        icon.classList.add('fas');
-        favoriteBtn.style.color = '#e84393';
-    } else {
-        icon.classList.remove('fas');
-        icon.classList.add('far');
-        favoriteBtn.style.color = '';
-    }
-}
-
-// Function to initialize 3D carousel
-function initThreeDCarousel() {
-    const container = document.querySelector('.carousel-container');
-    const prevBtn = document.querySelector('.carousel-prev');
-    const nextBtn = document.querySelector('.carousel-next');
-    
-    // Three.js setup
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.z = 7;
-    
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setClearColor(0x000000, 0);
-    container.appendChild(renderer.domElement);
-    
-    // Controls
-    let autoRotate = true;
-    let rotationSpeed = 0.005;
-    let targetRotationY = 0;
-    
-    // Create carousel group
-    const carouselGroup = new THREE.Group();
-    scene.add(carouselGroup);
-    
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-    
-    const pointLight = new THREE.PointLight(0x9d4edd, 1);
-    pointLight.position.set(10, 10, 10);
-    scene.add(pointLight);
-    
-    // Get gallery images
-    const galleryItems = Array.from(document.querySelectorAll('.grid-item'));
-    const totalItems = galleryItems.length;
-    
-    // Load textures and create planes
-    galleryItems.forEach((item, index) => {
-        const imgSrc = item.querySelector('img').src;
-        const texture = new THREE.TextureLoader().load(imgSrc);
-        
-        // Create material with texture
-        const material = new THREE.MeshStandardMaterial({
-            map: texture,
-            side: THREE.DoubleSide
-        });
-        
-        // Create plane geometry
-        const geometry = new THREE.PlaneGeometry(3, 2);
-        const mesh = new THREE.Mesh(geometry, material);
-        
-        // Position in circle
-        const angle = (index / totalItems) * Math.PI * 2;
-        const radius = 5;
-        mesh.position.x = Math.cos(angle) * radius;
-        mesh.position.z = Math.sin(angle) * radius;
-        
-        // Look at center
-        mesh.lookAt(0, 0, 0);
-        
-        // Add to carousel
-        carouselGroup.add(mesh);
-        
-        // Make interactive
-        mesh.userData = { 
-            id: item.dataset.id,
-            index: index 
-        };
-    });
-    
-    // Add raycaster for interactivity
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    
-    // Add event listeners
-    container.addEventListener('click', onCarouselClick);
-    container.addEventListener('mousemove', onCarouselMouseMove);
-    
-    prevBtn.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        targetRotationY += Math.PI * 2 / totalItems;
-        autoRotate = false;
-        setTimeout(() => { autoRotate = true; }, 2000);
-    });
-    
-    nextBtn.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        targetRotationY -= Math.PI * 2 / totalItems;
-        autoRotate = false;
-        setTimeout(() => { autoRotate = true; }, 2000);
-    });
-    
-    function onCarouselClick(event) {
-        // Calculate mouse position
-        mouse.x = (event.clientX - container.getBoundingClientRect().left) / container.clientWidth * 2 - 1;
-        mouse.y = -((event.clientY - container.getBoundingClientRect().top) / container.clientHeight) * 2 + 1;
-        
-        // Update the picking ray with the camera and mouse position
-        raycaster.setFromCamera(mouse, camera);
-        
-        // Calculate objects intersecting the picking ray
-        const intersects = raycaster.intersectObjects(carouselGroup.children);
-        
-        if (intersects.length > 0) {
-            const itemId = intersects[0].object.userData.id;
-            const gridItem = document.querySelector(`.grid-item[data-id="${itemId}"]`);
-            const imgSrc = gridItem.querySelector('img').src;
-            
-            // Get item data and open lightbox
-            const itemData = getGalleryItemById(itemId);
-            openLightbox(itemData);
-        }
+    if (!galleryGrid) {
+        console.error('Gallery grid not found');
+        return;
     }
     
-    function onCarouselMouseMove(event) {
-        // Calculate mouse position
-        mouse.x = (event.clientX - container.getBoundingClientRect().left) / container.clientWidth * 2 - 1;
-        mouse.y = -((event.clientY - container.getBoundingClientRect().top) / container.clientHeight) * 2 + 1;
-        
-        // Update the picking ray with the camera and mouse position
-        raycaster.setFromCamera(mouse, camera);
-        
-        // Calculate objects intersecting the picking ray
-        const intersects = raycaster.intersectObjects(carouselGroup.children);
-        
-        if (intersects.length > 0) {
-            container.style.cursor = 'pointer';
-        } else {
-            container.style.cursor = 'default';
-        }
-    }
-    
-    // Animation loop
-    function animate() {
-        requestAnimationFrame(animate);
-        
-        if (autoRotate) {
-            carouselGroup.rotation.y += rotationSpeed;
-        } else {
-            // Smooth rotation to target
-            carouselGroup.rotation.y += (targetRotationY - carouselGroup.rotation.y) * 0.05;
-        }
-        
-        renderer.render(scene, camera);
-    }
-    
-    animate();
-    
-    // Handle resize
-    window.addEventListener('resize', () => {
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-    });
-}
-
-// Function to initialize galaxy view
-function initGalaxyView() {
-    const container = document.querySelector('.galaxy-container');
-    
-    // Three.js setup
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.z = 20;
-    
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setClearColor(0x000000, 0);
-    container.appendChild(renderer.domElement);
-    
-    // Create galaxy center
-    const galaxyCenter = new THREE.Object3D();
-    scene.add(galaxyCenter);
-    
-    // Ambient light
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-    scene.add(ambientLight);
-    
-    // Point light at center
-    const centerLight = new THREE.PointLight(0x9d4edd, 2, 100);
-    centerLight.position.set(0, 0, 0);
-    galaxyCenter.add(centerLight);
-    
-    // Get gallery images
-    const galleryItems = Array.from(document.querySelectorAll('.grid-item'));
-    const imageObjects = [];
-    
-    // Load textures and create image planes
-    galleryItems.forEach((item, index) => {
-        const imgSrc = item.querySelector('img').src;
-        const texture = new THREE.TextureLoader().load(imgSrc);
-        
-        // Create material with texture
-        const material = new THREE.MeshBasicMaterial({
-            map: texture,
-            side: THREE.DoubleSide,
-            transparent: true
-        });
-        
-        // Create plane geometry
-        const size = 1.5 + Math.random() * 0.5;
-        const geometry = new THREE.PlaneGeometry(size, size * 0.7);
-        const mesh = new THREE.Mesh(geometry, material);
-        
-        // Random position in 3D space
-        const radius = 5 + Math.random() * 10;
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.random() * Math.PI - Math.PI / 2;
-        
-        mesh.position.x = radius * Math.sin(theta) * Math.cos(phi);
-        mesh.position.y = radius * Math.sin(phi);
-        mesh.position.z = radius * Math.cos(theta) * Math.cos(phi);
-        
-        // Random rotation
-        mesh.rotation.x = Math.random() * Math.PI;
-        mesh.rotation.y = Math.random() * Math.PI;
-        mesh.rotation.z = Math.random() * Math.PI;
-        
-        // Random orbit parameters
-        const orbitSpeed = 0.001 + Math.random() * 0.002;
-        const orbitRadius = radius;
-        const orbitAngle = theta;
-        const orbitY = mesh.position.y;
-        
-        imageObjects.push({
-            mesh,
-            orbitSpeed,
-            orbitRadius,
-            orbitAngle,
-            orbitY,
-            id: item.dataset.id
-        });
-        
-        // Add to scene
-        galaxyCenter.add(mesh);
-    });
-    
-    // Add raycaster for interactivity
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-    
-    // Add event listeners
-    container.addEventListener('click', onGalaxyClick);
-    container.addEventListener('mousemove', onGalaxyMouseMove);
-    
-    function onGalaxyClick(event) {
-        // Calculate mouse position
-        mouse.x = (event.clientX - container.getBoundingClientRect().left) / container.clientWidth * 2 - 1;
-        mouse.y = -((event.clientY - container.getBoundingClientRect().top) / container.clientHeight) * 2 + 1;
-        
-        // Update the picking ray with the camera and mouse position
-        raycaster.setFromCamera(mouse, camera);
-        
-        // Calculate objects intersecting the picking ray
-        const intersects = raycaster.intersectObjects(galaxyCenter.children);
-        
-        if (intersects.length > 0) {
-            // Find the image object
-            const selectedObject = imageObjects.find(obj => obj.mesh === intersects[0].object);
-            if (selectedObject) {
-                const itemId = selectedObject.id;
-                const itemData = getGalleryItemById(itemId);
-                openLightbox(itemData);
-            }
-        }
-    }
-    
-    function onGalaxyMouseMove(event) {
-        // Calculate mouse position
-        mouse.x = (event.clientX - container.getBoundingClientRect().left) / container.clientWidth * 2 - 1;
-        mouse.y = -((event.clientY - container.getBoundingClientRect().top) / container.clientHeight) * 2 + 1;
-        
-        // Update the picking ray with the camera and mouse position
-        raycaster.setFromCamera(mouse, camera);
-        
-        // Calculate objects intersecting the picking ray
-        const intersects = raycaster.intersectObjects(galaxyCenter.children);
-        
-        // Reset all image scales
-        imageObjects.forEach(obj => {
-            obj.mesh.scale.set(1, 1, 1);
-        });
-        
-        if (intersects.length > 0) {
-            // Enlarge the hovered image
-            const selectedObject = imageObjects.find(obj => obj.mesh === intersects[0].object);
-            if (selectedObject) {
-                selectedObject.mesh.scale.set(1.2, 1.2, 1.2);
-                container.style.cursor = 'pointer';
-            }
-        } else {
-            container.style.cursor = 'default';
-        }
-    }
-    
-    // Handle mouse movement for camera control
-    let mouseX = 0;
-    let mouseY = 0;
-    
-    document.addEventListener('mousemove', (event) => {
-        mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-        mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
-    });
-    
-    // Animation loop
-    function animate() {
-        requestAnimationFrame(animate);
-        
-        // Update image orbits
-        imageObjects.forEach(obj => {
-            obj.orbitAngle += obj.orbitSpeed;
-            
-            obj.mesh.position.x = obj.orbitRadius * Math.sin(obj.orbitAngle);
-            obj.mesh.position.z = obj.orbitRadius * Math.cos(obj.orbitAngle);
-            
-            // Make images always face the camera
-            obj.mesh.lookAt(camera.position);
-        });
-        
-        // Rotate galaxy center slightly
-        galaxyCenter.rotation.y += 0.001;
-        
-        // Move camera based on mouse
-        camera.position.x += (mouseX * 5 - camera.position.x) * 0.01;
-        camera.position.y += (mouseY * 5 - camera.position.y) * 0.01;
-        camera.lookAt(scene.position);
-        
-        renderer.render(scene, camera);
-    }
-    
-    animate();
-    
-    // Handle resize
-    window.addEventListener('resize', () => {
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-    });
-}
-
-// Helper function to get gallery item by id
-function getGalleryItemById(id) {
-    // In a real app, this would come from an API or database
-    // For demo purposes, we'll recreate the object
+    // Gallery items data
     const galleryItems = [
         {
             id: 1,
-            image: "https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg",
-            title: 'Music Bank Performance',
-            event: 'Music Bank',
-            date: '2023-06-12',
-            category: 'stage',
-            year: '2023',
-            outfit: 'Blue Dress'
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2022-12-18_16-56-14_UTC_nkbylf.jpg',
+            title: 'Eleven Era',
+            event: 'IVE Debut',
+            date: 'December 2021',
+            category: 'Performance',
+            year: '2021'
         },
         {
             id: 2,
-            image: "https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg",
-            title: 'Cosmopolitan Photoshoot',
-            event: 'Magazine Cover',
-            date: '2023-01-15',
-            category: 'photoshoot',
-            year: '2023',
-            outfit: 'White Elegant Suit'
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494571/2022-04-05_09-34-16_UTC_v5zdkm.jpg',
+            title: 'Love Dive Era',
+            event: 'Music Bank',
+            date: 'April 2022',
+            category: 'Performance',
+            year: '2022'
         },
         {
             id: 3,
@@ -1461,34 +998,58 @@ function initTimeline() {
     // Sample timeline data
     const timelineData = [
         {
-            date: '2018-09-01',
+            date: '2018-08-31',
             title: 'Ra mắt với Produce 48',
-            description: 'Wonyoung giành vị trí #1 trong chương trình sống còn Produce 48 và ra mắt với nhóm IZ*ONE.'
+            description: 'Jang Wonyoung đã ra mắt thông qua chương trình sống còn Produce 48 và xếp hạng #1, trở thành center của nhóm nhạc IZ*ONE.',
+            image: 'https://via.placeholder.com/300x400.png?text=Produce+48' // Placeholder
+        },
+        {
+            date: '2018-10-29',
+            title: 'Ra mắt cùng IZ*ONE',
+            description: 'IZ*ONE chính thức ra mắt với mini album đầu tay "COLOR*IZ" và ca khúc chủ đề "La Vie en Rose".',
+            image: 'https://via.placeholder.com/300x400.png?text=IZ*ONE+Debut' // Placeholder
         },
         {
             date: '2021-04-29',
             title: 'Tan rã IZ*ONE',
-            description: 'Sau 2.5 năm hoạt động, IZ*ONE chính thức tan rã. Wonyoung trở về công ty Starship Entertainment.'
+            description: 'Sau 2 năm 6 tháng hoạt động, IZ*ONE chính thức tan rã. Wonyoung trở về Starship Entertainment.',
+            image: 'https://via.placeholder.com/300x400.png?text=IZ*ONE+Disband' // Placeholder
         },
         {
             date: '2021-12-01',
-            title: 'Ra mắt với IVE',
-            description: 'Wonyoung chính thức ra mắt cùng nhóm nhạc mới IVE với single "ELEVEN".'
+            title: 'Ra mắt cùng IVE',
+            description: 'Wonyoung ra mắt với tư cách là thành viên của nhóm nhạc mới IVE với single đầu tay "ELEVEN".',
+            image: 'https://via.placeholder.com/300x400.png?text=IVE+Debut' // Placeholder
         },
         {
             date: '2022-04-05',
-            title: 'Phát hành "LOVE DIVE"',
-            description: 'IVE phát hành single thứ hai "LOVE DIVE" và đạt được thành công lớn trên các bảng xếp hạng âm nhạc.'
+            title: 'Comeback với LOVE DIVE',
+            description: 'IVE phát hành single thứ hai "LOVE DIVE" và đạt được thành công lớn, giúp nhóm giành nhiều cúp trên các chương trình âm nhạc.',
+            image: 'https://via.placeholder.com/300x400.png?text=LOVE+DIVE' // Placeholder
         },
         {
             date: '2022-08-22',
-            title: 'Phát hành "After LIKE"',
-            description: 'IVE tiếp tục thành công với single "After LIKE", củng cố vị thế trong làng nhạc K-pop.'
+            title: 'Phát hành After LIKE',
+            description: 'IVE phát hành single thứ ba "After LIKE", tiếp tục khẳng định vị thế của nhóm trong ngành công nghiệp âm nhạc Kpop.',
+            image: 'https://via.placeholder.com/300x400.png?text=After+LIKE' // Placeholder
         },
         {
             date: '2023-04-10',
-            title: 'Album đầu tay "I\'ve IVE"',
-            description: 'IVE phát hành album đầy đủ đầu tiên "I\'ve IVE" với title track "I AM".'
+            title: 'Album đầu tay I\'VE IVE',
+            description: 'IVE phát hành album đầu tay "I\'VE IVE" với ca khúc chủ đề "I AM" và tiếp tục gặt hái nhiều thành công.',
+            image: 'https://via.placeholder.com/300x400.png?text=I\'VE+IVE+Album' // Placeholder
+        },
+        {
+            date: '2023-10-13',
+            title: 'Phát hành album I\'VE MINE',
+            description: 'IVE phát hành album thứ hai "I\'VE MINE" với ca khúc chủ đề "Baddie", thể hiện sự trưởng thành trong âm nhạc.',
+            image: 'https://via.placeholder.com/300x400.png?text=I\'VE+MINE+Album' // Placeholder
+        },
+        {
+            date: '2024-07-29',
+            title: 'MLEM Single Release',
+            description: 'IVE phát hành bản single mùa hè "MLEM" với sự tỏa sáng của Wonyoung, đánh dấu phong cách mới cho nhóm.',
+            image: 'https://via.placeholder.com/300x400.png?text=MLEM+Single' // Placeholder
         }
     ];
     
@@ -1509,13 +1070,13 @@ function initTimeline() {
         glowElement.className = 'cosmic-glow';
         
         eventElement.innerHTML = `
-            <div class="timeline-date">${formatDate(event.date)}</div>
+            <div class="timeline-date">${formatDate(new Date(event.date))}</div>
             <h3 class="timeline-title">${event.title}</h3>
             <p class="timeline-description">${event.description}</p>
         `;
         
         // Add delay based on index for staggered animation
-        eventElement.style.animationDelay = `${index * 0.2}s`;
+        eventElement.style.animationDelay = `${index * 0.3}s`;
         
         // Add star and glow elements
         eventElement.appendChild(starElement);
@@ -1526,7 +1087,7 @@ function initTimeline() {
     
     // Add cosmic particles to timeline
     const timelineContainer = document.querySelector('.timeline-container');
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
         const particle = document.createElement('div');
         particle.className = 'cosmic-particle';
         particle.style.left = `${Math.random() * 100}%`;
@@ -1536,11 +1097,38 @@ function initTimeline() {
         timelineContainer.appendChild(particle);
     }
     
+    // Add more particles to cosmic background
+    const cosmicBackground = document.querySelector('.cosmic-background');
+    if (cosmicBackground) {
+        for (let i = 0; i < 30; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'cosmic-particle';
+            particle.style.left = `${Math.random() * 100}%`;
+            particle.style.top = `${Math.random() * 100}%`;
+            particle.style.width = `${1 + Math.random() * 2}px`;
+            particle.style.height = particle.style.width;
+            particle.style.animationDuration = `${Math.random() * 15 + 10}s`;
+            particle.style.animationDelay = `${Math.random() * 5}s`;
+            cosmicBackground.appendChild(particle);
+        }
+    }
+    
     // Animate timeline events on scroll
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('visible');
+                
+                // Add sound effect when element becomes visible
+                const revealSound = document.getElementById('hover-sound');
+                if (revealSound) {
+                    try {
+                        revealSound.currentTime = 0;
+                        revealSound.play().catch(e => console.log('Audio play prevented: ', e));
+                    } catch (error) {
+                        console.log('Audio play error: ', error);
+                    }
+                }
             }
         });
     }, { threshold: 0.2 });
@@ -1558,120 +1146,213 @@ function formatDate(dateString) {
 
 // Function to initialize music player
 function initMusicPlayer() {
-    const playerToggle = document.getElementById('player-toggle-btn');
     const musicPlayer = document.getElementById('music-player');
-    const playButton = document.querySelector('.player-play');
-    const prevButton = document.querySelector('.player-prev');
-    const nextButton = document.querySelector('.player-next');
-    const volumeSlider = document.querySelector('.volume-slider');
-    const timeline = document.querySelector('.player-timeline');
-    const progress = document.querySelector('.timeline-progress');
-    const backgroundMusic = document.getElementById('background-music');
+    // Ensure backgroundMusic is the global variable initialized in initAudio
+    if (!backgroundMusic) {
+         console.error("Background music element not found or not initialized!");
+         backgroundMusic = document.getElementById('background-music'); // Attempt fallback
+         if (!backgroundMusic) return;
+    }
     
-    // Sample playlist
+    const playButton = musicPlayer.querySelector('.player-play');
+    const prevButton = musicPlayer.querySelector('.player-prev');
+    const nextButton = musicPlayer.querySelector('.player-next');
+    const volumeSlider = musicPlayer.querySelector('.volume-slider');
+    const timeline = musicPlayer.querySelector('.player-timeline');
+    const progress = musicPlayer.querySelector('.timeline-progress');
+    const albumArt = musicPlayer.querySelector('.album-art');
+    const trackName = musicPlayer.querySelector('.track-name');
+    const artistName = musicPlayer.querySelector('.artist-name');
+    const playerToggleButton = document.getElementById('player-toggle-btn');
+    const playerContainer = musicPlayer.querySelector('.player-container');
+    const gallerySoundToggle = document.getElementById('gallery-sound-toggle'); // Gallery sound button
+
+    if (!musicPlayer || !playButton || !volumeSlider || !albumArt || !trackName || !artistName) {
+        console.error("Essential Music player elements not found!");
+        return;
+    }
+    
+    // Default Wonyoung image
+    const defaultCoverImage = "https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg";
+    
+    // Define the playlist - ONLY ONE TRACK
     const playlist = [
-        {
-            name: 'Love Dive',
-            artist: 'IVE',
-            src: 'https://assets.codepen.io/217233/ambience.mp3', // Placeholder URL
-            cover: 'https://i.imgur.com/uKQqsuA.jpg'
-        },
-        {
-            name: 'ELEVEN',
-            artist: 'IVE',
-            src: 'https://assets.codepen.io/217233/ambience.mp3', // Placeholder URL
-            cover: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg'
-        },
-        {
-            name: 'After LIKE',
-            artist: 'IVE',
-            src: 'https://assets.codepen.io/217233/ambience.mp3', // Placeholder URL
-            cover: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1718695130/xwmqeytqj85j5mkydxpk.jpg'
-        }
+        { name: 'Mlem', artist: 'IVE - Wonyoung', src: 'mlem.mp3', cover: defaultCoverImage }
+        // { name: 'Love Dive', artist: 'IVE', src: 'https://res.cloudinary.com/dacbvhtgz/video/upload/v1743495389/IVE_LOVE_DIVE_MV_u5yd8k.mp4', cover: defaultCoverImage },
+        // { name: 'After LIKE', artist: 'IVE', src: 'https://res.cloudinary.com/dacbvhtgz/video/upload/v1743495391/IVE_After_LIKE_MV_qf5jzv.mp4', cover: defaultCoverImage }
     ];
     
     let currentTrack = 0;
-    let isPlaying = false;
+    // Global isPlaying flag is updated by initAudio event listeners
     
-    // Toggle player visibility
-    playerToggle.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        musicPlayer.classList.toggle('active');
-    });
+    // Toggle Player Visibility
+    if (playerToggleButton && playerContainer) {
+        playerToggleButton.addEventListener('click', () => {
+             document.getElementById('click-sound')?.play().catch(e => console.log('Audio play prevented: ', e));
+            // playerContainer.classList.toggle('visible'); // REMOVED: Logic now handled by parent .expanded class
+            musicPlayer.classList.toggle('active');    // <-- ADDED THIS LINE TO TOGGLE 'active'
+            musicPlayer.classList.toggle('expanded');  // <-- KEPT THIS LINE TO TOGGLE 'expanded'
+
+        });
+        // Start expanded and visible
+        // playerContainer.classList.add('visible'); // REMOVED: Logic now handled by parent .expanded class
+        musicPlayer.classList.add('expanded'); // Start expanded
+        musicPlayer.classList.add('active');   // <-- ADDED: Ensure it starts active if expanded
+    }else {
+        console.log('Player is not expanded');
+        musicPlayer.classList.remove('expanded');
+        // musicPlayer.classList.remove('active'); // <-- REMOVED: Let the toggle handle this if needed initially
+    }
     
-    // Play/Pause
+    // Play/Pause Button
     playButton.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        
-        if (isPlaying) {
-            backgroundMusic.pause();
-            playButton.innerHTML = '<i class="fas fa-play"></i>';
+        document.getElementById('click-sound')?.play().catch(e => console.log('Audio play prevented: ', e));
+        togglePlayPause();
+    });
+    
+    // Centralized Play/Pause Logic
+    function togglePlayPause() {
+        if (!backgroundMusic) return;
+        if (backgroundMusic.paused || backgroundMusic.ended) {
+            backgroundMusic.play().catch(e => {
+                console.error('Error playing audio via toggle:', e);
+                // updateSoundIcons(false); // Icons updated via listeners
+            });
         } else {
-            backgroundMusic.play().catch(e => console.log('Audio play prevented: ', e));
-            playButton.innerHTML = '<i class="fas fa-pause"></i>';
+            backgroundMusic.pause();
         }
-        
-        isPlaying = !isPlaying;
-    });
+        // Icons are updated via the onplay/onpause event handlers in initAudio
+    }
     
-    // Previous track
-    prevButton.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        currentTrack = (currentTrack - 1 + playlist.length) % playlist.length;
-        loadTrack(currentTrack);
-    });
+    // Sync with gallery sound toggle button
+    if (gallerySoundToggle) {
+        gallerySoundToggle.addEventListener('click', () => {
+            togglePlayPause();
+        });
+    }
     
-    // Next track
-    nextButton.addEventListener('click', () => {
-        document.getElementById('click-sound').play().catch(e => console.log('Audio play prevented: ', e));
-        currentTrack = (currentTrack + 1) % playlist.length;
-        loadTrack(currentTrack);
-    });
+    // Previous track - DISABLED
+    if (prevButton) {
+        prevButton.disabled = true;
+        prevButton.style.opacity = '0.5';
+        prevButton.style.pointerEvents = 'none';
+        // Remove existing listener if any (although unlikely needed here)
+        // prevButton.replaceWith(prevButton.cloneNode(true)); 
+    }
+    // prevButton.addEventListener('click', () => {
+    //     document.getElementById('click-sound')?.play().catch(e => console.log('Audio play prevented: ', e));
+    //     currentTrack = (currentTrack - 1 + playlist.length) % playlist.length;
+    //     loadTrack(currentTrack);
+    // });
+    
+    // Next track - DISABLED
+    if (nextButton) {
+        nextButton.disabled = true;
+        nextButton.style.opacity = '0.5';
+        nextButton.style.pointerEvents = 'none';
+        // Remove existing listener if any
+        // nextButton.replaceWith(nextButton.cloneNode(true));
+    }
+    // nextButton.addEventListener('click', () => {
+    //     document.getElementById('click-sound')?.play().catch(e => console.log('Audio play prevented: ', e));
+    //     currentTrack = (currentTrack + 1) % playlist.length;
+    //     loadTrack(currentTrack);
+    // });
     
     // Volume control
     volumeSlider.addEventListener('input', () => {
-        backgroundMusic.volume = volumeSlider.value / 100;
+        if (!backgroundMusic) return;
+        let volume = volumeSlider.value / 100;
+        backgroundMusic.volume = volume;
+        backgroundMusic.muted = (volume === 0); // Mute if volume is 0
+        // Icons updated via onvolumechange in initAudio
     });
-    
+    // Set initial volume based on slider value
+    if (backgroundMusic) backgroundMusic.volume = volumeSlider.value / 100;
+
     // Timeline control
     timeline.addEventListener('click', (e) => {
+        if (!backgroundMusic || !backgroundMusic.duration) return;
         const timelineWidth = timeline.clientWidth;
         const clickPosition = e.offsetX;
         const duration = backgroundMusic.duration;
-        
         backgroundMusic.currentTime = (clickPosition / timelineWidth) * duration;
     });
     
-    // Update progress
+    // Update progress bar
     backgroundMusic.addEventListener('timeupdate', () => {
-        const duration = backgroundMusic.duration;
-        if (duration) {
-            const currentTime = backgroundMusic.currentTime;
-            const progressPercent = (currentTime / duration) * 100;
-            progress.style.width = `${progressPercent}%`;
+        if (!backgroundMusic || !backgroundMusic.duration) {
+            progress.style.width = '0%';
+            return;
         }
+        const duration = backgroundMusic.duration;
+        const currentTime = backgroundMusic.currentTime;
+        const progressPercent = (currentTime / duration) * 100;
+        progress.style.width = `${progressPercent}%`;
     });
     
-    // Load track
+    // Load track function - Refined
     function loadTrack(index) {
+        if (!backgroundMusic || index < 0 || index >= playlist.length) {
+            console.error("Cannot load track, invalid index or audio element missing.");
+            return;
+        }
         const track = playlist[index];
+        currentTrack = index; // Ensure currentTrack index is updated
         
         // Update track info
-        document.querySelector('.track-name').textContent = track.name;
-        document.querySelector('.artist-name').textContent = track.artist;
-        document.querySelector('.album-art').src = track.cover;
+        trackName.textContent = track.name;
+        artistName.textContent = track.artist;
+        albumArt.src = track.cover || defaultCoverImage;
         
+        // Determine if audio should play after loading
+        // Check the *intended* state (was it playing before loading new track?)
+        const wasPlaying = !backgroundMusic.paused && backgroundMusic.currentTime > 0;
+
         // Update audio source
-        backgroundMusic.src = track.src;
+        // Check if src actually needs changing to avoid unnecessary reloads
+        const currentSrc = backgroundMusic.currentSrc.split('/').pop(); // Get filename from full URL
+        const newSrcFilename = track.src.split('/').pop();
         
-        // Play if already playing
-        if (isPlaying) {
-            backgroundMusic.play().catch(e => console.log('Audio play prevented: ', e));
+        if (currentSrc !== newSrcFilename) {
+             console.log(`Loading track: ${track.name}, Src: ${track.src}`);
+             backgroundMusic.src = track.src;
+             backgroundMusic.load(); // Important: explicitly load the new source
+        } else {
+            console.log(`Track ${track.name} already loaded or same source.`);
+            // If src is the same, but audio was stopped (e.g., ended), ensure we can replay if needed
+            backgroundMusic.currentTime = 0;
+        }
+
+        // Reset progress bar
+        progress.style.width = '0%';
+
+        // Use 'canplaythrough' event to play if it was playing before
+        const playWhenReady = () => {
+            if (wasPlaying) {
+                backgroundMusic.play().catch(e => console.error('Error auto-playing loaded track:', e));
+            }
+            backgroundMusic.removeEventListener('canplaythrough', playWhenReady); // Clean up
+        };
+
+        // If the source changed, wait for it to be ready
+        if (currentSrc !== newSrcFilename) {
+             backgroundMusic.removeEventListener('canplaythrough', playWhenReady); // Remove old listener first
+             backgroundMusic.addEventListener('canplaythrough', playWhenReady);
+        } else if (wasPlaying) {
+            // If src is the same and it was playing, play immediately (or after a tiny delay)
+            // This handles replaying the same track or clicking next/prev quickly
+            setTimeout(() => {
+                 backgroundMusic.play().catch(e => console.error('Error re-playing track:', e));
+            }, 50); // Small delay helps sometimes
         }
     }
     
-    // Initialize first track
-    loadTrack(currentTrack);
+    // Initialize first track info (loads src, doesn't play yet)
+    loadTrack(currentTrack); 
+    console.log("Music player initialized. LoadTrack called for initial track.");
+
+    // REMOVED the old setTimeout auto-play logic
 }
 
 // Functions for favorites
@@ -2136,4 +1817,529 @@ function initButtonParticles() {
         },
         retina_detect: true
     });
+}
+
+// Function to initialize the image journey section
+function initImageJourney() {
+    const container = document.querySelector('.image-journey-container');
+    const section = document.getElementById('image-journey-section');
+    
+    if (!container || !section) return; // Exit if elements not found
+
+    // Sample timeline data (should match the one used elsewhere)
+    const timelineData = [
+        {
+            date: '2018-08-31',
+            title: 'Ra mắt với Produce 48',
+            description: 'Jang Wonyoung đã ra mắt thông qua chương trình sống còn Produce 48 và xếp hạng #1, trở thành center của nhóm nhạc IZ*ONE.',
+            image: 'https://via.placeholder.com/300x400.png?text=Produce+48' // Placeholder
+        },
+        {
+            date: '2018-10-29',
+            title: 'Ra mắt cùng IZ*ONE',
+            description: 'IZ*ONE chính thức ra mắt với mini album đầu tay "COLOR*IZ" và ca khúc chủ đề "La Vie en Rose".',
+            image: 'https://via.placeholder.com/300x400.png?text=IZ*ONE+Debut' // Placeholder
+        },
+        {
+            date: '2021-04-29',
+            title: 'Tan rã IZ*ONE',
+            description: 'Sau 2 năm 6 tháng hoạt động, IZ*ONE chính thức tan rã. Wonyoung trở về Starship Entertainment.',
+            image: 'https://via.placeholder.com/300x400.png?text=IZ*ONE+Disband' // Placeholder
+        },
+        {
+            date: '2021-12-01',
+            title: 'Ra mắt cùng IVE',
+            description: 'Wonyoung ra mắt với tư cách là thành viên của nhóm nhạc mới IVE với single đầu tay "ELEVEN".',
+            image: 'https://via.placeholder.com/300x400.png?text=IVE+Debut' // Placeholder
+        },
+        {
+            date: '2022-04-05',
+            title: 'Comeback với LOVE DIVE',
+            description: 'IVE phát hành single thứ hai "LOVE DIVE" và đạt được thành công lớn, giúp nhóm giành nhiều cúp trên các chương trình âm nhạc.',
+            image: 'https://via.placeholder.com/300x400.png?text=LOVE+DIVE' // Placeholder
+        },
+        {
+            date: '2022-08-22',
+            title: 'Phát hành After LIKE',
+            description: 'IVE phát hành single thứ ba "After LIKE", tiếp tục khẳng định vị thế của nhóm trong ngành công nghiệp âm nhạc Kpop.',
+            image: 'https://via.placeholder.com/300x400.png?text=After+LIKE' // Placeholder
+        },
+        {
+            date: '2023-04-10',
+            title: 'Album đầu tay I\'VE IVE',
+            description: 'IVE phát hành album đầu tay "I\'VE IVE" với ca khúc chủ đề "I AM" và tiếp tục gặt hái nhiều thành công.',
+            image: 'https://via.placeholder.com/300x400.png?text=I\'VE+IVE+Album' // Placeholder
+        },
+        {
+            date: '2023-10-13',
+            title: 'Phát hành album I\'VE MINE',
+            description: 'IVE phát hành album thứ hai "I\'VE MINE" với ca khúc chủ đề "Baddie", thể hiện sự trưởng thành trong âm nhạc.',
+            image: 'https://via.placeholder.com/300x400.png?text=I\'VE+MINE+Album' // Placeholder
+        },
+        {
+            date: '2024-07-29',
+            title: 'MLEM Single Release',
+            description: 'IVE phát hành bản single mùa hè "MLEM" với sự tỏa sáng của Wonyoung, đánh dấu phong cách mới cho nhóm.',
+            image: 'https://via.placeholder.com/300x400.png?text=MLEM+Single' // Placeholder
+        }
+    ];
+
+    container.innerHTML = ''; // Clear previous content
+
+    timelineData.forEach((event, index) => {
+        const journeyItem = document.createElement('div');
+        journeyItem.className = 'journey-item';
+        journeyItem.style.animationDelay = `${index * 0.15}s`; // Stagger animation
+
+        journeyItem.innerHTML = `
+            <img src="${event.image}" alt="${event.title}" class="journey-image" loading="lazy">
+            <div class="journey-info">
+                <h4 class="journey-title">${event.title}</h4>
+                <p class="journey-date">${formatDate(event.date)}</p>
+                <p class="journey-description">${event.description}</p>
+            </div>
+        `;
+        container.appendChild(journeyItem);
+    });
+
+    // Intersection observer for reveal animation
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+                observer.unobserve(entry.target); // Animate only once
+            }
+        });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.journey-item').forEach(item => {
+        observer.observe(item);
+    });
+}
+
+// Helper function to format date (assuming it exists elsewhere)
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+// Existing initTimeline function (can be removed or kept if needed elsewhere)
+// function initTimeline() { ... }
+
+// ... rest of the script
+
+// Function to toggle music play/pause
+function toggleMusic() {
+    if (!backgroundMusic) return;
+    
+    if (isPlaying) {
+        backgroundMusic.pause();
+        isPlaying = false;
+    } else {
+        backgroundMusic.play()
+            .then(() => {
+                isPlaying = true;
+            })
+            .catch(e => console.error('Could not play audio on toggle:', e));
+    }
+    
+    updateSoundIcons();
+}
+
+// Function to play the next track in the playlist
+function playNextTrack() {
+    // Get the current song info
+    const currentSongElement = document.querySelector('.current-song');
+    const playlist = [
+        { title: 'Mlem', artist: 'IVE', file: 'mlem.mp3' },
+        { title: 'Love Dive', artist: 'IVE', file: 'love_dive.mp3' },
+        { title: 'Eleven', artist: 'IVE', file: 'eleven.mp3' },
+        { title: 'After Like', artist: 'IVE', file: 'after_like.mp3' }
+    ];
+    
+    let currentIndex = 0;
+    
+    // Find current index in playlist
+    if (currentSongElement) {
+        const currentTitle = currentSongElement.querySelector('.song-title')?.textContent;
+        currentIndex = playlist.findIndex(song => song.title === currentTitle);
+    }
+    
+    // Move to next song
+    currentIndex = (currentIndex + 1) % playlist.length;
+    const nextSong = playlist[currentIndex];
+    
+    // Update audio source
+    if (backgroundMusic) {
+        backgroundMusic.querySelector('source').src = nextSong.file;
+        backgroundMusic.load();
+        backgroundMusic.play()
+            .then(() => {
+                isPlaying = true;
+                updateSoundIcons();
+                
+                // Update music player UI if exists
+                updateMusicPlayerUI(nextSong);
+            })
+            .catch(e => console.error('Could not play next track:', e));
+    }
+}
+
+// Function to update music player UI
+function updateMusicPlayerUI(songInfo) {
+    const titleElement = document.querySelector('.song-title');
+    const artistElement = document.querySelector('.song-artist');
+    const coverElement = document.querySelector('.player-cover img');
+    
+    if (titleElement) titleElement.textContent = songInfo.title;
+    if (artistElement) artistElement.textContent = songInfo.artist;
+    
+    // Update cover image based on song
+    if (coverElement) {
+        let coverUrl;
+        switch(songInfo.title) {
+            case 'Mlem':
+                coverUrl = 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494575/2024-07-30_08-13-29_UTC_sblx0m.jpg';
+                break;
+            case 'Love Dive':
+                coverUrl = 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494571/2022-04-05_09-34-16_UTC_v5zdkm.jpg';
+                break;
+            case 'Eleven':
+                coverUrl = 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2022-12-18_16-56-14_UTC_nkbylf.jpg';
+                break;
+            case 'After Like':
+                coverUrl = 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494578/2022-10-19_11-41-35_UTC_omuflj.jpg';
+                break;
+            default:
+                coverUrl = 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494575/2024-07-30_08-13-29_UTC_sblx0m.jpg';
+        }
+        coverElement.src = coverUrl;
+    }
+}
+
+// Function to load timeline content for gallery two
+function loadTimelineContent() {
+    const timelineContainer = document.getElementById('gallery-timeline');
+    if (!timelineContainer) return;
+    
+    // Timeline data - sự kiện quan trọng của Wonyoung
+    const timelineData = [
+        {
+            date: '2018-08-31',
+            title: 'Ra mắt với Produce 48',
+            description: 'Jang Wonyoung được chọn là center cho bài hát chủ đề và xếp hạng #1 trong chung kết.',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2022-12-18_16-56-14_UTC_nkbylf.jpg'
+        },
+        {
+            date: '2018-10-29',
+            title: 'Ra mắt với IZ*ONE',
+            description: 'Album đầu tay COLOR*IZ với ca khúc chủ đề La Vie en Rose.',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494571/2022-04-05_09-34-16_UTC_v5zdkm.jpg'
+        },
+        {
+            date: '2021-04-29',
+            title: 'Tan rã cùng IZ*ONE',
+            description: 'Kết thúc hoạt động nhóm 2 năm 6 tháng với concert kỷ niệm "ONE, THE STORY".',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2024-02-08_09-00-03_UTC_8_vgl2px.jpg'
+        },
+        {
+            date: '2021-12-01',
+            title: 'Ra mắt với IVE',
+            description: 'Debut cùng IVE với ca khúc "ELEVEN" dưới Starship Entertainment.',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2022-12-18_16-56-14_UTC_nkbylf.jpg'
+        },
+        {
+            date: '2022-04-05',
+            title: 'Comeback với LOVE DIVE',
+            description: 'Ca khúc đã giành các giải thưởng Daesang và thành công lớn trên các bảng xếp hạng.',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494571/2022-04-05_09-34-16_UTC_v5zdkm.jpg'
+        },
+        {
+            date: '2022-08-22',
+            title: 'Phát hành After LIKE',
+            description: 'Hit thứ ba liên tiếp của IVE, kết hợp sample từ "I Will Survive".',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494578/2022-10-19_11-41-35_UTC_omuflj.jpg'
+        },
+        {
+            date: '2023-04-10',
+            title: 'Album đầu tiên "I\'VE IVE"',
+            description: 'Album đầy đủ đầu tiên với ca khúc chủ đề "I AM".',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494564/2023-10-13_09-29-25_UTC_nxfwpe.jpg'
+        },
+        {
+            date: '2023-10-13',
+            title: 'Phát hành album "I\'VE MINE"',
+            description: 'Ca khúc chủ đề "Baddie" và "Off The Record" thu hút nhiều sự chú ý.',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494575/2024-07-30_08-13-29_UTC_sblx0m.jpg'
+        },
+        {
+            date: '2024-07-29',
+            title: 'Single mùa hè "MLEM"',
+            description: 'Ca khúc mùa hè sôi động với vũ đạo độc đáo được fan yêu thích.',
+            image: 'https://res.cloudinary.com/dacbvhtgz/image/upload/v1743494575/2024-07-30_08-13-29_UTC_sblx0m.jpg'
+        }
+    ];
+    
+    // Create timeline items with modern design
+    timelineContainer.innerHTML = '';
+    
+    // Create pagination indicators
+    const paginationIndicator = document.getElementById('pagination-indicator');
+    if (paginationIndicator) {
+        paginationIndicator.innerHTML = '';
+        for (let i = 0; i < timelineData.length; i++) {
+            const dot = document.createElement('span');
+            dot.className = 'pagination-dot';
+            if (i === 0) dot.classList.add('active');
+            dot.dataset.index = i;
+            
+            dot.addEventListener('click', () => {
+                showTimelineItem(i);
+            });
+            
+            paginationIndicator.appendChild(dot);
+        }
+    }
+    
+    // Create timeline items
+    timelineData.forEach((item, index) => {
+        const timelineItem = document.createElement('div');
+        timelineItem.className = 'timeline-item';
+        if (index === 0) timelineItem.classList.add('active');
+        timelineItem.dataset.index = index;
+        
+        // Format date for display
+        const dateObj = new Date(item.date);
+        const formattedDate = dateObj.toLocaleDateString('vi-VN', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        
+        timelineItem.innerHTML = `
+            <div class="timeline-content">
+                <div class="timeline-image">
+                    <img src="${item.image}" alt="${item.title}">
+                </div>
+                <div class="timeline-text">
+                    <div class="timeline-date">${formattedDate}</div>
+                    <h3 class="timeline-title">${item.title}</h3>
+                    <p class="timeline-description">${item.description}</p>
+                </div>
+            </div>
+        `;
+        
+        timelineContainer.appendChild(timelineItem);
+    });
+}
+
+// Function to setup timeline navigation
+function setupTimelineNavigation() {
+    const prevButton = document.querySelector('.prev-button');
+    const nextButton = document.querySelector('.next-button');
+    const timelineItems = document.querySelectorAll('.timeline-item');
+    const paginationDots = document.querySelectorAll('.pagination-dot');
+    
+    let currentIndex = 0;
+    const totalItems = timelineItems.length;
+    
+    // Function to show specific timeline item
+    window.showTimelineItem = function(index) {
+        // Hide all items
+        timelineItems.forEach(item => {
+            item.classList.remove('active');
+            gsap.to(item, {
+                opacity: 0,
+                x: -50,
+                duration: 0.3,
+                display: 'none'
+            });
+        });
+        
+        // Update pagination dots
+        paginationDots.forEach(dot => {
+            dot.classList.remove('active');
+        });
+        
+        // Show selected item
+        if (timelineItems[index]) {
+            currentIndex = index;
+            
+            // Show current item with animation
+            gsap.fromTo(timelineItems[index],
+                { opacity: 0, x: 50, display: 'block' },
+                { opacity: 1, x: 0, duration: 0.5, ease: 'power2.out' }
+            );
+            
+            timelineItems[index].classList.add('active');
+            
+            // Update pagination
+            if (paginationDots[index]) {
+                paginationDots[index].classList.add('active');
+            }
+        }
+    };
+    
+    // Previous button
+    if (prevButton) {
+        prevButton.addEventListener('click', () => {
+            let newIndex = currentIndex - 1;
+            if (newIndex < 0) newIndex = totalItems - 1;
+            showTimelineItem(newIndex);
+        });
+    }
+    
+    // Next button
+    if (nextButton) {
+        nextButton.addEventListener('click', () => {
+            let newIndex = currentIndex + 1;
+            if (newIndex >= totalItems) newIndex = 0;
+            showTimelineItem(newIndex);
+        });
+    }
+    
+    // Add keyboard navigation
+    document.addEventListener('keydown', (e) => {
+        if (document.querySelector('.timeline-item.active')) {
+            if (e.key === 'ArrowLeft') {
+                let newIndex = currentIndex - 1;
+                if (newIndex < 0) newIndex = totalItems - 1;
+                showTimelineItem(newIndex);
+            } else if (e.key === 'ArrowRight') {
+                let newIndex = currentIndex + 1;
+                if (newIndex >= totalItems) newIndex = 0;
+                showTimelineItem(newIndex);
+            }
+        }
+    });
+    
+    // Auto-advance timer (optional)
+    const autoAdvanceInterval = 7000; // 7 seconds per slide
+    let autoAdvanceTimer = setInterval(() => {
+        // Only auto-advance if user is on the timeline view
+        if (document.querySelector('.timeline-item.active')) {
+            let newIndex = currentIndex + 1;
+            if (newIndex >= totalItems) newIndex = 0;
+            showTimelineItem(newIndex);
+        }
+    }, autoAdvanceInterval);
+    
+    // Stop auto-advance on user interaction
+    const stopAutoAdvance = () => {
+        clearInterval(autoAdvanceTimer);
+        // Restart after a longer period of inactivity
+        setTimeout(() => {
+            autoAdvanceTimer = setInterval(() => {
+                if (document.querySelector('.timeline-item.active')) {
+                    let newIndex = currentIndex + 1;
+                    if (newIndex >= totalItems) newIndex = 0;
+                    showTimelineItem(newIndex);
+                }
+            }, autoAdvanceInterval);
+        }, 30000); // 30 seconds of inactivity before restarting
+    };
+    
+    // Stop auto-advance on user interaction
+    document.querySelectorAll('.nav-button, .pagination-dot').forEach(el => {
+        el.addEventListener('click', stopAutoAdvance);
+    });
+}
+
+// Function to show image preview when clicking on a gallery item
+function showImagePreview(item) {
+    // Create preview overlay
+    const previewOverlay = document.createElement('div');
+    previewOverlay.className = 'image-preview-overlay';
+    
+    // Create preview content
+    previewOverlay.innerHTML = `
+        <div class="image-preview-container">
+            <img src="${item.image}" alt="${item.title}">
+            <div class="image-preview-info">
+                <h2>${item.title}</h2>
+                <p>${item.event} - ${item.date}</p>
+                <p class="image-preview-category">${item.category}</p>
+            </div>
+            <button class="image-preview-close">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    // Add to body
+    document.body.appendChild(previewOverlay);
+    
+    // Animate in
+    setTimeout(() => {
+        previewOverlay.classList.add('active');
+    }, 10);
+    
+    // Close on click
+    const closeButton = previewOverlay.querySelector('.image-preview-close');
+    if (closeButton) {
+        closeButton.addEventListener('click', () => {
+            previewOverlay.classList.remove('active');
+            setTimeout(() => {
+                previewOverlay.remove();
+            }, 300);
+        });
+    }
+    
+    // Close on background click
+    previewOverlay.addEventListener('click', (e) => {
+        if (e.target === previewOverlay) {
+            previewOverlay.classList.remove('active');
+            setTimeout(() => {
+                previewOverlay.remove();
+            }, 300);
+        }
+    });
+}
+
+// Function to add cosmic particle effects to gallery
+function addCosmicParticlesToGallery() {
+    const galleryContainer = document.getElementById('gallery-container');
+    if (!galleryContainer) return;
+    
+    // Create particles container if it doesn't exist
+    let particlesContainer = document.querySelector('.gallery-cosmic-particles');
+    if (!particlesContainer) {
+        particlesContainer = document.createElement('div');
+        particlesContainer.className = 'gallery-cosmic-particles';
+        particlesContainer.style.position = 'absolute';
+        particlesContainer.style.top = '0';
+        particlesContainer.style.left = '0';
+        particlesContainer.style.width = '100%';
+        particlesContainer.style.height = '100%';
+        particlesContainer.style.pointerEvents = 'none';
+        particlesContainer.style.zIndex = '1';
+        galleryContainer.appendChild(particlesContainer);
+    }
+    
+    // Clear existing particles
+    particlesContainer.innerHTML = '';
+    
+    // Create cosmic particles
+    for (let i = 0; i < 30; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'cosmic-particle';
+        
+        // Random properties
+        const size = Math.random() * 3 + 1;
+        const posX = Math.random() * 100;
+        const posY = Math.random() * 100;
+        const delay = Math.random() * 5;
+        const duration = Math.random() * 10 + 10;
+        
+        // Set styles
+        particle.style.width = `${size}px`;
+        particle.style.height = `${size}px`;
+        particle.style.left = `${posX}%`;
+        particle.style.top = `${posY}%`;
+        particle.style.boxShadow = `0 0 ${size + 5}px rgba(224, 170, 255, 0.8)`;
+        particle.style.animation = `floatParticle ${duration}s infinite linear`;
+        particle.style.animationDelay = `${delay}s`;
+        
+        particlesContainer.appendChild(particle);
+    }
 }
